@@ -20,8 +20,9 @@ quadtree <- function(xy, k=1) {
     else {
       q0 <- (1 + runif(1,min=-1/2,max=1/2)/dim(xy)[1])/2 # Random quantile near the median
       x0 <- quantile(xy[,i], q0)
-      j <- i %% d + 1 # (Works for octrees, too...)
-      rv <- list(index=i, threshold=x0, 
+      ## Modulus: 1 becomes 2, 2 becomes 1 when d=2
+      j <- i %% d + 1 # (Works for octrees, too...) 
+      rv <- list(index=i, threshold=x0, range=range(xy[,i]),
                  lower=quad(xy[xy[,i] <= x0, ], j, id*2), 
                  upper=quad(xy[xy[,i] > x0, ], j, id*2+1))
       class(rv) <- "quadtree"
@@ -34,8 +35,9 @@ quadtree <- function(xy, k=1) {
 points.quadtree <- function(q, ...) {
   points(q$lower, ...); points(q$upper, ...)
 }
+
 points.quadtree.leaf <- function(q, ...) {
-  points(q$value, col=hsv(q$id), ...)
+    points(q$value, col=hcl(q$id), ...)
 }
 
 
@@ -53,12 +55,53 @@ lines.quadtree <- function(q, xylim, ...) {
   xy <- cbind(c(q$threshold, q$threshold), xlim)
   lines(xy[, order(i:j)],  ...)
 }
+
 lines.quadtree.leaf <- function(q, xylim, ...) {} # Nothing to do at leaves!
 
+##'extract records
+##' @param q previously build quadtree
+##' @param x extaction coordinates in the first dimension
+##' @param y extaction coordinates in the first dimension
+##' @param r extraction radius
+
+### SUBSET based on range
+qextract <- function(q,x,y,r=1){
+
+    refxy <- c(x,y)
+    uppxy <- refxy+r
+    lowxy <- refxy-r
+    
+    climbTree <- function(q,xy, i) {
+
+        d <- dim(xy)
+        ## Modulus: 1 becomes 2, 2 becomes 1 when d=2
+        j <- i %% d + 1 # (Works for octrees, too...)
+
+        if(class(q)=="quadtree.leaf"){
+        return(q$value)
+        } else {
+            
+            ## check overlap in ranges
+            ## (StartA <= EndB)  and  (EndA >= StartB)
+            if((lowxy[j]<=q$lower$range[2])&(uppxy[j]>=q$lower$range[1])){
+                climbTree(q$lower,xy,j)
+#                cat("$lower")
+            } else if((lowxy[j]<=q$upper$range[2])&(uppxy[j]>=q$upper$range[1])) {
+              climbTree(q$upper,xy,j)
+#                 cat("$upper")
+            }
+        }
+        }
+
+  
+     climbTree(q,xy=refxy,1)
+
+}
 
 
-n <- 25000       # Points per cluster
-n.centers <- 40  # Number of cluster centers
+
+n <- 2500       # Points per cluster
+n.centers <- 20  # Number of cluster centers
 sd <- 1/2        # Standard deviation of each cluster
 set.seed(17)
 centers <- matrix(runif(n.centers*2, min=c(-90, 30), max=c(-75, 40)), ncol=2, byrow=TRUE)
@@ -73,5 +116,5 @@ plot(xylim, type="n", xlab="x", ylab="y", main="Quadtree")
 #
 # This is all the code needed for the plot!
 #
-lines(qt, xylim, col="Gray")
-points(qt, pch=".")
+points(qt, pch=16)
+lines(qt, xylim, col="gray")
