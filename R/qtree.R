@@ -14,7 +14,7 @@ quadtree <- function(xy, k=1) {
   d <- dim(xy)[2]
   quad <- function(xy, i, id=1) {
     if (length(xy) < 2*k*d) {
-      rv = list(id=id, value=xy)
+      rv = list(id=id, value=xy,range=range(xy))
       class(rv) <- "quadtree.leaf"
     }
     else {
@@ -70,31 +70,43 @@ qextract <- function(q,x,y,r=1){
     refxy <- c(x,y)
     uppxy <- refxy+r
     lowxy <- refxy-r
-    
-    climbTree <- function(q,xy, i) {
+    d <- dim(xy)[2]
 
-        d <- dim(xy)
-        ## Modulus: 1 becomes 2, 2 becomes 1 when d=2
-        j <- i %% d + 1 # (Works for octrees, too...)
+    ## new environment to save records
+    qenv <- new.env()
+
+    
+    climbTree <- function(q,xy, i,d) {
+
+    ## Modulus: 1 becomes 2, 2 becomes 1 when d=2
+    j <- i %% d + 1 # (Works for octrees, too...)
+        
 
         if(class(q)=="quadtree.leaf"){
-        return(q$value)
+            ##return(q$value)
+            assign(paste0("a",q$id),q$value,envir=qenv)
+            
         } else {
             
             ## check overlap in ranges
+        #    cat(q$lower$range,"-", uppxy, "-", length(j))
             ## (StartA <= EndB)  and  (EndA >= StartB)
             if((lowxy[j]<=q$lower$range[2])&(uppxy[j]>=q$lower$range[1])){
-                climbTree(q$lower,xy,j)
-#                cat("$lower")
-            } else if((lowxy[j]<=q$upper$range[2])&(uppxy[j]>=q$upper$range[1])) {
-              climbTree(q$upper,xy,j)
-#                 cat("$upper")
+             #   cat("$lower")
+                climbTree(q$lower,xy,j,d)
+         
+            }
+            if((lowxy[j]<=q$upper$range[2])&(uppxy[j]>=q$upper$range[1])) {
+            #  cat("$upper")
+              climbTree(q$upper,xy,j,d)
             }
         }
         }
 
   
-     climbTree(q,xy=refxy,1)
+    climbTree(q,xy=refxy,1,d)
+    ## get results
+    lapply(ls(envir=qenv),function(X) get(X,envir=qenv))
 
 }
 
@@ -104,7 +116,8 @@ n <- 2500       # Points per cluster
 n.centers <- 20  # Number of cluster centers
 sd <- 1/2        # Standard deviation of each cluster
 set.seed(17)
-centers <- matrix(runif(n.centers*2, min=c(-90, 30), max=c(-75, 40)), ncol=2, byrow=TRUE)
+centers <- matrix(runif(n.centers*2, m
+                        in=c(-90, 30), max=c(-75, 40)), ncol=2, byrow=TRUE)
 xy <- matrix(apply(centers, 1, function(x) rnorm(n*2, mean=x, sd=sd)), ncol=2, byrow=TRUE)
 k <- 5
 system.time(qt <- quadtree(xy, k))
@@ -118,3 +131,8 @@ plot(xylim, type="n", xlab="x", ylab="y", main="Quadtree")
 #
 points(qt, pch=16)
 lines(qt, xylim, col="gray")
+
+## test
+extr <- do.call(rbind,qextract(qt,-88,39,r=4))
+points(-88,39,col="red",pch="X",cex=2)
+points(extr[,1],extr[,2],col=rgb(0,1,0,alpha=0.2))
